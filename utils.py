@@ -4,7 +4,7 @@ import time
 import os
 import errno
 import logging
-import coloredlogs
+# import coloredlogs
 
 
 def get_floats(floats_str):
@@ -41,7 +41,7 @@ def setup_logging(args):
         error=dict(color="red"),
         critical=dict(color="magenta"),
     )
-    coloredlogs.install(logger=logger, level=args.loglv, fmt=FORMAT, datefmt=DATEFMT, level_styles=LEVEL_STYLES)
+    # coloredlogs.install(logger=logger, level=args.loglv, fmt=FORMAT, datefmt=DATEFMT, level_styles=LEVEL_STYLES)
 
     # Determine suffix
     suffix = ""

@@ -6,6 +6,7 @@ from patches.rnn import dynamic_rnn
 from patches.attention import *
 from patches.activation import *
 
+tf.compat.v1.disable_eager_execution()
 
 class Model(object):
     def __init__(
@@ -22,35 +23,48 @@ class Model(object):
     ):
         # Placeholders
         with tf.name_scope("inputs"):
-            self.uid_batch_ph = tf.placeholder(tf.int32, [None], name="uid_batch_ph")
-            self.mid_batch_ph = tf.placeholder(tf.int32, [None], name="mid_batch_ph")
-            self.target_ph = tf.placeholder(tf.float32, [None, None], name="target_ph")
-            self.lr = tf.placeholder(tf.float32, [], name="lr")
-            self.temp = tf.placeholder(tf.float32, [], name="temp")
-            self.mid_his_batch_ph = tf.placeholder(tf.int32, [None, None], name="mid_his_batch_ph")
-            self.cat_his_batch_ph = tf.placeholder(tf.int32, [None, None], name="cat_his_batch_ph")
-            self.cat_batch_ph = tf.placeholder(tf.int32, [None], name="cat_batch_ph")
-            self.mask = tf.placeholder(tf.float32, [None, None], name="mask")
-            self.seq_len_ph = tf.placeholder(tf.int32, [None], name="seq_len_ph")
+            self.uid_batch_ph = tf.compat.v1.placeholder(tf.int32, [None], name="uid_batch_ph")
+            self.mid_batch_ph = tf.compat.v1.placeholder(tf.int32, [None], name="mid_batch_ph")
+            self.target_ph = tf.compat.v1.placeholder(tf.float32, [None, None], name="target_ph")
+            self.lr = tf.compat.v1.placeholder(tf.float32, [], name="lr")
+            self.lr = tf.Variable(initial_value=0.001, trainable=False, dtype=tf.float32)
+            self.temp = tf.compat.v1.placeholder(tf.float32, [], name="temp")
+            self.mid_his_batch_ph = tf.compat.v1.placeholder(tf.int32, [None, None], name="mid_his_batch_ph")
+            self.cat_his_batch_ph = tf.compat.v1.placeholder(tf.int32, [None, None], name="cat_his_batch_ph")
+            self.cat_batch_ph = tf.compat.v1.placeholder(tf.int32, [None], name="cat_batch_ph")
+            self.mask = tf.compat.v1.placeholder(tf.float32, [None, None], name="mask")
+            self.seq_len_ph = tf.compat.v1.placeholder(tf.int32, [None], name="seq_len_ph")
             self.use_negsampling = use_negsampling
             if use_negsampling:
-                self.noclk_mid_batch_ph = tf.placeholder(tf.int32, [None, None, None], name="noclk_mid_batch_ph")
-                self.noclk_cat_batch_ph = tf.placeholder(tf.int32, [None, None, None], name="noclk_cat_batch_ph")
+                self.noclk_mid_batch_ph = tf.compat.v1.placeholder(tf.int32, [None, None, None], name="noclk_mid_batch_ph")
+                self.noclk_cat_batch_ph = tf.compat.v1.placeholder(tf.int32, [None, None, None], name="noclk_cat_batch_ph")
 
         # Embedding layers
-        with tf.variable_scope("embedding"):
-            self.uid_embeddings_var = tf.get_variable("uid_embedding_var", [n_uid, EMBEDDING_DIM])
+        with tf.name_scope("embedding"):
+            # self.uid_embeddings_var = tf.get_variable("uid_embedding_var", [n_uid, EMBEDDING_DIM])
+            self.uid_embeddings_var = tf.Variable(
+                initial_value=tf.random.normal([n_uid, EMBEDDING_DIM]),
+                name="uid_embedding_var"
+            )
             tf.summary.histogram("uid_embeddings_var", self.uid_embeddings_var)
             self.uid_batch_embedded = tf.nn.embedding_lookup(self.uid_embeddings_var, self.uid_batch_ph)
 
-            self.mid_embeddings_var = tf.get_variable("mid_embedding_var", [n_mid, EMBEDDING_DIM])
+            # self.mid_embeddings_var = tf.get_variable("mid_embedding_var", [n_mid, EMBEDDING_DIM])
+            self.mid_embeddings_var = tf.Variable(
+                initial_value=tf.random.normal([n_uid, EMBEDDING_DIM]),
+                name="mid_embedding_var"
+            )
             tf.summary.histogram("mid_embeddings_var", self.mid_embeddings_var)
             self.mid_batch_embedded = tf.nn.embedding_lookup(self.mid_embeddings_var, self.mid_batch_ph)
             self.mid_his_batch_embedded = tf.nn.embedding_lookup(self.mid_embeddings_var, self.mid_his_batch_ph)
             if self.use_negsampling:
                 self.noclk_mid_his_batch_embedded = tf.nn.embedding_lookup(self.mid_embeddings_var, self.noclk_mid_batch_ph)
 
-            self.cat_embeddings_var = tf.get_variable("cat_embedding_var", [n_cat, EMBEDDING_DIM])
+            # self.cat_embeddings_var = tf.get_variable("cat_embedding_var", [n_cat, EMBEDDING_DIM])
+            self.cat_embeddings_var = tf.Variable(
+                initial_value=tf.random.normal([n_uid, EMBEDDING_DIM]),
+                name="cat_embedding_var"
+            )
             tf.summary.histogram("cat_embeddings_var", self.cat_embeddings_var)
             self.cat_batch_embedded = tf.nn.embedding_lookup(self.cat_embeddings_var, self.cat_batch_ph)
             self.cat_his_batch_embedded = tf.nn.embedding_lookup(self.cat_embeddings_var, self.cat_his_batch_ph)
@@ -83,10 +97,11 @@ class Model(object):
 
     def build_network(self, inp, activation="prelu"):
         layer_dims = self.layer_dims
-        with tf.variable_scope("network"):
-            hid = tf.layers.batch_normalization(inputs=inp, name="bn_0")
+        with tf.name_scope("network"):
+            # hid = tf.layers.batch_normalization(inputs=inp, name="bn_0")
+            hid = tf.keras.layers.BatchNormalization(name="bn_0")(inp)
             for i in range(len(layer_dims)):
-                hid = tf.layers.dense(hid, layer_dims[i], activation=None, name="layer_" + str(i + 1))
+                hid = tf.keras.layers.Dense(layer_dims[i], activation=None, name="layer_" + str(i + 1))(hid)
                 if activation == "relu":
                     hid = tf.nn.relu(hid)
                 elif activation == "tanh":
@@ -142,8 +157,8 @@ class Model(object):
         self.build_network(inp, activation=activation)
 
         if self.layer_dims:
-            with tf.variable_scope("adapter"):
-                self.hid = tf.layers.dense(self.hid, D, activation=None, name="layer_adapter")
+            with tf.name_scope("adapter"):
+                self.hid = tf.keras.layers.Dense(D, activation=None, name="layer_adapter")(self.hid)
                 if self.with_wide:
                     d_layer_wide = tf.concat(
                         [tf.concat([self.item_eb, self.item_his_eb_sum], axis=-1), self.item_eb * self.item_his_eb_sum], axis=-1
@@ -155,23 +170,28 @@ class Model(object):
         Y = self.target_ph
 
         # Variational parameters
-        with tf.variable_scope("variational"):
-            Z = tf.get_variable("ind_point", shape=(num_inducing, D), dtype=tf.float32)
-            q_mu = tf.get_variable(
-                "ind_mean", shape=(num_inducing, 1), initializer=tf.initializers.constant(prior_mean), dtype=tf.float32
+        with tf.name_scope("variational"):
+            Z = tf.Variable(
+                initial_value=tf.random.normal([num_inducing, D], dtype=tf.float32),
+                name="ind_point"
+            )
+            q_mu = tf.Variable(
+                initial_value=tf.constant(prior_mean, shape=[num_inducing, 1], dtype=tf.float32),
+                name="ind_mean"
             )
             if diag_cov:
-                q_cov_variable = tf.get_variable(
-                    "ind_cov_flat", shape=[num_inducing], initializer=tf.initializers.constant(amplitude), dtype=tf.float32
+                q_cov_variable = tf.Variable(
+                    initial_value=tf.constant(amplitude, shape=[num_inducing], dtype=tf.float32),
+                    name="ind_cov_flat"
                 )
             else:
-                q_cov_variable = tf.get_variable(
-                    "ind_cov_flat",
-                    shape=((num_inducing + 1) * num_inducing / 2,),
-                    initializer=tf.initializers.constant(
-                        amplitude * np.eye(num_inducing, dtype=np.float32)[np.tril_indices(num_inducing)]
+                q_cov_variable = tf.Variable(
+                    initial_value=tf.constant(
+                        amplitude * np.eye(num_inducing, dtype=np.float32)[np.tril_indices(num_inducing)],
+                        shape=[(num_inducing + 1) * num_inducing // 2],
+                        dtype=tf.float32
                     ),
-                    dtype=tf.float32,
+                    name="ind_cov_flat"
                 )
         self.Z = Z
         self.q_mu = q_mu
@@ -198,8 +218,8 @@ class Model(object):
         Lp_inv_Lq = tf.linalg.triangular_solve(Lp, Lq, lower=True)
         trace = tf.reduce_sum(tf.square(Lp_inv_Lq))
 
-        logdet_qcov = tf.reduce_sum(tf.log(self.epsilon + tf.square(Lq_diag)))
-        logdet_pcov = tf.reduce_sum(tf.log(self.epsilon + tf.square(tf.linalg.diag_part(Lp))))
+        logdet_qcov = tf.reduce_sum(tf.math.log(self.epsilon + tf.square(Lq_diag)))
+        logdet_pcov = tf.reduce_sum(tf.math.log(self.epsilon + tf.square(tf.linalg.diag_part(Lp))))
 
         constant = -num_inducing
 
@@ -214,8 +234,8 @@ class Model(object):
 
         KXX_diag = amplitude * amplitude * tf.ones([tf.shape(X)[0], 1])
         KXZ_KZZ_inv_Lq = tf.matmul(KZZ_inv_KZX, Lq, transpose_a=True)
-        f_var_1 = tf.reduce_sum(tf.square(tf.transpose(Lp_inv_KZX)), axis=1, keep_dims=True)
-        f_var_2 = tf.reduce_sum(tf.square(KXZ_KZZ_inv_Lq), axis=1, keep_dims=True)
+        f_var_1 = tf.reduce_sum(tf.square(tf.transpose(Lp_inv_KZX)), axis=1, keepdims=True)
+        f_var_2 = tf.reduce_sum(tf.square(KXZ_KZZ_inv_Lq), axis=1, keepdims=True)
         f_var = KXX_diag - f_var_1 + f_var_2
         self.logit_var = tf.squeeze(f_var)
 
@@ -233,7 +253,7 @@ class Model(object):
         pctr_samples = tf.expand_dims(inv_link_func(x_logit_samples), axis=2)
         pctr_samples_with_noclk = tf.concat([pctr_samples, 1 - pctr_samples], axis=2)
         variational_ep_ll = tf.reduce_sum(
-            w_gh * tf.reshape(Y, shape=(-1, 1, 2)) * tf.log(pctr_samples_with_noclk + self.epsilon), axis=(1, 2)
+            w_gh * tf.reshape(Y, shape=(-1, 1, 2)) * tf.math.log(pctr_samples_with_noclk + self.epsilon), axis=(1, 2)
         )
         Likelihood = tf.reduce_mean(variational_ep_ll)
 
@@ -266,12 +286,13 @@ class Model(object):
         if self.use_negsampling:
             self.loss += self.aux_loss
 
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_ops = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             if self.optm.lower() == "adam":
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, beta1=self.beta1, epsilon=self.epsilon).minimize(
-                    self.loss
-                )
+                self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=self.beta1, epsilon=self.epsilon)
+                # self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, beta1=self.beta1, epsilon=self.epsilon).minimize(
+                #     self.loss
+                # )
             elif self.optm.lower() == "momentum":
                 self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=self.beta1).minimize(self.loss)
 
@@ -282,13 +303,13 @@ class Model(object):
 
         prop_gh = tf.reduce_sum(w_gh * pctr_samples_with_noclk, axis=1)
 
-        x_logit_samples_mc = tf.random_normal([tf.shape(f_mean)[0], n_mc_samples], dtype=tf.float32) * tf.sqrt(f_var) + f_mean
-        prop_mc, prop_mc_var = tf.nn.moments(inv_link_func(x_logit_samples_mc), axes=[1], keep_dims=True)
+        x_logit_samples_mc = tf.random.normal([tf.shape(f_mean)[0], n_mc_samples], dtype=tf.float32) * tf.sqrt(f_var) + f_mean
+        prop_mc, prop_mc_var = tf.nn.moments(inv_link_func(x_logit_samples_mc), axes=[1], keepdims=True)
         prop_mc = tf.concat([prop_mc, 1 - prop_mc], axis=1)
 
-        NLL_lg = -tf.reduce_mean(tf.reduce_sum(tf.log(prop_naive) * Y, axis=1))
-        NLL_gh = -tf.reduce_mean(tf.reduce_sum(tf.log(prop_gh) * Y, axis=1))
-        NLL_mc = -tf.reduce_mean(tf.reduce_sum(tf.log(prop_mc) * Y, axis=1))
+        NLL_lg = -tf.reduce_mean(tf.reduce_sum(tf.math.log(prop_naive) * Y, axis=1))
+        NLL_gh = -tf.reduce_mean(tf.reduce_sum(tf.math.log(prop_gh) * Y, axis=1))
+        NLL_mc = -tf.reduce_mean(tf.reduce_sum(tf.math.log(prop_mc) * Y, axis=1))
 
         # Summary
         with tf.name_scope("Metrics"):
@@ -307,7 +328,7 @@ class Model(object):
             tf.summary.scalar("NLL_mc", NLL_mc)
             tf.summary.scalar("kmeans_loss", kmeans_loss)
 
-        self.merged = tf.summary.merge_all()
+        # self.merged = tf.summary.merge_all()
 
     def train(self, sess, inps):
         feed_dict = {
@@ -471,8 +492,8 @@ class Model_DIN(Model):
             gp_params_dict=gp_params_dict,
         )
 
-        with tf.variable_scope("network"):
-            with tf.variable_scope("Attention_layer"):
+        with tf.name_scope("network"):
+            with tf.name_scope("Attention_layer"):
                 attention_output = din_attention(self.item_eb, self.item_his_eb, ATTENTION_SIZE, self.mask)
                 att_fea = tf.reduce_sum(attention_output, 1)
                 tf.summary.histogram("att_fea", att_fea)
@@ -510,8 +531,8 @@ class Model_DIEN(Model):
             gp_params_dict=gp_params_dict,
         )
 
-        with tf.variable_scope("network"):
-            with tf.variable_scope("rnn_1"):
+        with tf.name_scope("network"):
+            with tf.name_scope("rnn_1"):
                 rnn_outputs, _ = dynamic_rnn(
                     GRUCell(HIDDEN_SIZE),
                     inputs=self.item_his_eb,
@@ -530,7 +551,7 @@ class Model_DIEN(Model):
             )
             self.aux_loss = aux_loss_1
 
-            with tf.variable_scope("attn_1"):
+            with tf.name_scope("attn_1"):
                 _, alphas = din_fcn_attention(
                     self.item_eb,
                     rnn_outputs,
@@ -543,7 +564,7 @@ class Model_DIEN(Model):
                 )
                 tf.summary.histogram("alpha_outputs", alphas)
 
-            with tf.variable_scope("rnn_2"):
+            with tf.name_scope("rnn_2"):
                 _, final_state2 = dynamic_rnn(
                     VecAttGRUCell(HIDDEN_SIZE),
                     inputs=rnn_outputs,
