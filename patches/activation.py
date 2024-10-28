@@ -23,8 +23,13 @@ def dice(_x, axis=-1, epsilon=1e-09, name=""):
 
 
 def prelu(_x, scope=""):
-    with tf.variable_scope(name_or_scope=scope, default_name="prelu"):
-        _alpha = tf.get_variable(
-            "prelu_" + scope, shape=_x.get_shape()[-1], dtype=_x.dtype, initializer=tf.constant_initializer(0.1)
+    with tf.name_scope(name=scope):
+        # _alpha = tf.get_variable(
+        #     "prelu_" + scope, shape=_x.get_shape()[-1], dtype=_x.dtype, initializer=tf.constant_initializer(0.1)
+        # )
+        _alpha = tf.Variable(
+            initial_value=tf.constant(0.1, shape=_x.shape[-1:]),
+            name="prelu_" + scope,
+            dtype=_x.dtype
         )
         return tf.maximum(0.0, _x) + _alpha * tf.minimum(0.0, _x)

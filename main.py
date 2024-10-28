@@ -59,7 +59,7 @@ import dataset
 # random seeds
 random.seed(args.seed)
 np.random.seed(args.seed)
-tf.set_random_seed(args.seed)
+tf.random.set_seed(args.seed)
 
 # copy python files for reproducibility
 logger, dirname = utils.setup_logging(args)
@@ -231,13 +231,18 @@ else:
 # ----------------------------------------------------------------
 # Training
 
-GPU_OPTIONS = tf.GPUOptions(allow_growth=True)
-CONFIG = tf.ConfigProto(gpu_options=GPU_OPTIONS)
-sess = tf.Session(config=CONFIG)
-global_init_op = tf.global_variables_initializer()
+# GPU_OPTIONS = tf.GPUOptions(allow_growth=True)
+# CONFIG = tf.ConfigProto(gpu_options=GPU_OPTIONS)
+# sess = tf.Session(config=CONFIG)
+# global_init_op = tf.global_variables_initializer()
+# sess.run(global_init_op)
+
+# Create a session without specifying GPU options
+sess = tf.compat.v1.Session()
+global_init_op = tf.compat.v1.global_variables_initializer()
 sess.run(global_init_op)
 
-writer = tf.summary.FileWriter(dirname + "/summary/")
+# writer = tf.summary.FileWriter(dirname + "/summary/")
 
 
 def evaluate(sess, test_data, model):
@@ -275,21 +280,25 @@ def write_summary(_writer, tag, value, step):
     _writer.flush()
 
 
-saver = tf.train.Saver(max_to_keep=None)
-if args.model_path:
-    saver.restore(sess, args.model_path)
-    logger.info("Loaded model from {}".format(args.model_path))
+# saver = tf.train.Saver(max_to_keep=None)
+# if args.model_path:
+#     saver.restore(sess, args.model_path)
+#     logger.info("Loaded model from {}".format(args.model_path))
 
 # print variables
 logger.debug("Model Variables:")
-for p in tf.trainable_variables():
-    logger.debug("%s: %s" % (p.name, sess.run(tf.shape(p))))
+# for p in tf.trainable_variables():
+#     logger.debug("%s: %s" % (p.name, sess.run(tf.shape(p))))
 
 # start training
 step = 0
 loss_list, acc_list, aux_loss_list = [], [], []
 test_auc_list, test_loss_list, test_acc_list, test_aux_loss_list = [], [], [], []
 for epoch in range(n_epochs):
+    train_data = dataset.DataIterator("local_train_splitByUser", data_path, batch_size, maxlen)
+ 
+    print('train_data =', train_data)
+
     for src, tgt in train_data:
         uids, mids, cats, mid_his, cat_his, mid_mask, target, sl, noclk_mids, noclk_cats = prepare_data(
             src, tgt, maxlen, return_neg=True
@@ -313,8 +322,8 @@ for epoch in range(n_epochs):
                     np.mean(aux_loss_list[-args.log_every :]),
                 )
             )
-            writer.add_summary(smr, step)
-            writer.flush()
+            # writer.add_summary(smr, step)
+            # writer.flush()
 
         # test and visualization
         if step % args.viz_every == 0:
@@ -328,18 +337,18 @@ for epoch in range(n_epochs):
             test_loss_list.append(test_loss)
             test_acc_list.append(test_accuracy)
             test_aux_loss_list.append(test_aux_loss)
-            write_summary(writer, tag="Test/auc", value=test_auc, step=step)
-            write_summary(writer, tag="Test/accuracy", value=test_accuracy, step=step)
-            write_summary(writer, tag="Test/loss", value=test_loss, step=step)
+            # write_summary(writer, tag="Test/auc", value=test_auc, step=step)
+            # write_summary(writer, tag="Test/accuracy", value=test_accuracy, step=step)
+            # write_summary(writer, tag="Test/loss", value=test_loss, step=step)
 
             if best_auc < test_auc:
                 best_auc = test_auc
-                saver.save(sess, dirname + "/best_model/")
+                # saver.save(sess, dirname + "/best_model/")
                 logger.warning("[{}] Saved best model at step: {}, auc = {:.5f}".format(args.message, step, best_auc))
 
         # save model
         if step % args.model_every == 0:
-            saver.save(sess, dirname + "/model/", global_step=step)
+            # saver.save(sess, dirname + "/model/", global_step=step)
             logger.info("Saved model at step: {}".format(step))
 
     # learning rate decay after each epoch

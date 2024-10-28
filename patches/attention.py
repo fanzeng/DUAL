@@ -1,11 +1,9 @@
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import *
-from tensorflow.contrib.rnn.python.ops.core_rnn_cell import _Linear
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import variable_scope as vs
-from activation import prelu
 
 
 class VecAttGRUCell(RNNCell):
@@ -35,28 +33,26 @@ class VecAttGRUCell(RNNCell):
             if self._bias_initializer is None:
                 bias_ones = init_ops.constant_initializer(1.0, dtype=inputs.dtype)
             with vs.variable_scope("gates"):
-                self._gate_linear = _Linear(
-                    [inputs, state],
+                self._gate_linear = tf.keras.layers.Dense(
                     2 * self._num_units,
-                    True,
+                    use_bias=True,
                     bias_initializer=bias_ones,
-                    kernel_initializer=self._kernel_initializer,
+                    kernel_initializer=self._kernel_initializer
                 )
 
-        value = math_ops.sigmoid(self._gate_linear([inputs, state]))
+        value = math_ops.sigmoid(self._gate_linear(tf.concat([inputs, state], axis=-1)))
         r, u = array_ops.split(value=value, num_or_size_splits=2, axis=1)
 
         r_state = r * state
         if self._candidate_linear is None:
             with vs.variable_scope("candidate"):
-                self._candidate_linear = _Linear(
-                    [inputs, r_state],
-                    self._num_units,
+                self._candidate_linear = tf.keras.layers.Dense(
+                    2 * self._num_units,
                     True,
                     bias_initializer=self._bias_initializer,
                     kernel_initializer=self._kernel_initializer,
                 )
-        c = self._activation(self._candidate_linear([inputs, r_state]))
+        c = self._activation(self._candidate_linear(tf.concat([inputs, r_state], axis=-1)))
         u = (1.0 - att_score) * u
         new_h = u * state + (1 - u) * c
         return new_h, new_h
@@ -122,7 +118,7 @@ def din_fcn_attention(
     facts_size = facts.get_shape().as_list()[-1]
     querry_size = query.get_shape().as_list()[-1]
     query = tf.layers.dense(query, facts_size, activation=None, name="f1" + stag)
-    query = prelu(query)
+    query = tf.keras.layers.PReLU(query)
     queries = tf.tile(query, [1, tf.shape(facts)[1]])
     queries = tf.reshape(queries, tf.shape(facts))
     din_all = tf.concat([queries, facts, queries - facts, queries * facts], axis=-1)
